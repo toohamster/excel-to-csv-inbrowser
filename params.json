@@ -1,6 +1,6 @@
 {
   "name": "Excel-to-csv-inbrowser",
   "tagline": "excel-to-csv-inbrowser",
-  "body": "# excel-to-csv-inbrowser\r\nexcel-to-csv-inbrowser\r\n\r\n为了方便压测宝用户便捷使用测试数据功能而做的数据转换工具.\r\n\r\n当前的转换工具要么要装库,要么要收费,没有完全开源可用的版本.\r\n甚至还需要转码,加上mac机器上的offcie转csv灰常的难操作,故开发\r\n此工具...\r\n\r\n欢迎吐槽!\r\n",
+  "body": "# excel-to-csv-inbrowser\r\nexcel-to-csv-inbrowser\r\n\r\n为了方便压测宝用户便捷使用测试数据功能而做的数据转换工具.\r\n\r\n当前的转换工具要么要装库,要么要收费,没有完全开源可用的版本.\r\n甚至还需要转码,加上mac机器上的offcie转csv灰常的难操作,故开发此工具...\r\n\r\n演示地址: http://eemcmc.oschina.io/excel-to-csv-inbrowser/\r\n\r\n欢迎吐槽!\r\n",
   "note": "Don't delete this file! It's used internally to help with page regeneration."
 }
