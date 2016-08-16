@@ -5,9 +5,33 @@
     <title>Excel-to-csv-inbrowser by toohamster</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
-    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.useso.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
     <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+    <style>
+    #container{
+      margin: 0 auto;
+      width: 80%;
+    }
+    #container h1 {
+      text-align: center;
+    }
+    #oop {
+      border: 1px solid solid;
+      min-height: 300px;
+      background: gray;
+      padding-left: 10px;
+    }
+    #drop{
+      border:2px dashed #bbb;
+      -moz-border-radius:5px;
+      -webkit-border-radius:5px;
+      border-radius:5px;
+      padding:25px;
+      text-align:center;
+      font:20pt bold,"Vollkorn";color:#bbb;
+    }
+    </style>
   </head>
   <body>
     <section class="page-header">
@@ -33,6 +57,29 @@
 
 <p>欢迎吐槽!</p>
 
+      <div id="container">
+        输出格式:
+        <select name="format">
+        <option value="csv" selected> CSV</option>
+        </select><br />
+
+        <div id="drop">拖拽文件到此...</div>
+        
+        <p>
+          <input type="file" name="xlfile" id="xlf" />&nbsp;&nbsp;&nbsp;
+          <input type="button" id="fileExport" value="下载文件"/>
+        </p>
+        <div style="display:none;">
+          useworker<input type="checkbox" name="useworker" checked><br />
+          xferable<input type="checkbox" name="xferable" checked><br />
+          userabs<input type="checkbox" name="userabs" checked><br />
+        </div>
+        <p></p>
+        <div id="oop">
+          <pre id="out"></pre>
+        </div>
+      </div>
+
       <footer class="site-footer">
         <span class="site-footer-owner"><a href="https://github.com/toohamster/excel-to-csv-inbrowser">Excel-to-csv-inbrowser</a> is maintained by <a href="https://github.com/toohamster">toohamster</a>.</span>
 
@@ -43,4 +90,255 @@
 
   
   </body>
+  <!-- uncomment the next line here and in xlsxworker.js for encoding support -->
+<script src="js/shim.js"></script>
+<script src="js/jszip.js"></script>
+<script src="js/xlsx.js"></script>
+<!-- uncomment the next line here and in xlsxworker.js for ODS support -->
+<script src="js/ods.js"></script>
+<script src="js/sxexport.js"></script>
+<script>
+if (!String.prototype.trim) {
+  String.prototype.trim = function () {
+    return this.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, '');
+  };
+}
+
+var X = XLSX;
+var XW = {
+  /* worker message */
+  msg: 'xlsx',
+  /* worker scripts */
+  rABS: './js/xlsxworker2.js',
+  norABS: './js/xlsxworker1.js',
+  noxfer: './js/xlsxworker.js'
+};
+
+var rABS = typeof FileReader !== "undefined" && typeof FileReader.prototype !== "undefined" && typeof FileReader.prototype.readAsBinaryString !== "undefined";
+if(!rABS) {
+  document.getElementsByName("userabs")[0].disabled = true;
+  document.getElementsByName("userabs")[0].checked = false;
+}
+
+var use_worker = typeof Worker !== 'undefined';
+if(!use_worker) {
+  document.getElementsByName("useworker")[0].disabled = true;
+  document.getElementsByName("useworker")[0].checked = false;
+}
+
+var transferable = use_worker;
+if(!transferable) {
+  document.getElementsByName("xferable")[0].disabled = true;
+  document.getElementsByName("xferable")[0].checked = false;
+}
+
+var wtf_mode = false;
+
+function fixdata(data) {
+  var o = "", l = 0, w = 10240;
+  for(; l<data.byteLength/w; ++l) o+=String.fromCharCode.apply(null,new Uint8Array(data.slice(l*w,l*w+w)));
+  o+=String.fromCharCode.apply(null, new Uint8Array(data.slice(l*w)));
+  return o;
+}
+
+function ab2str(data) {
+  var o = "", l = 0, w = 10240;
+  for(; l<data.byteLength/w; ++l) o+=String.fromCharCode.apply(null,new Uint16Array(data.slice(l*w,l*w+w)));
+  o+=String.fromCharCode.apply(null, new Uint16Array(data.slice(l*w)));
+  return o;
+}
+
+function s2ab(s) {
+  var b = new ArrayBuffer(s.length*2), v = new Uint16Array(b);
+  for (var i=0; i != s.length; ++i) v[i] = s.charCodeAt(i);
+  return [v, b];
+}
+
+function xw_noxfer(data, cb) {
+  var worker = new Worker(XW.noxfer);
+  worker.onmessage = function(e) {
+    switch(e.data.t) {
+      case 'ready': break;
+      case 'e': console.error(e.data.d); break;
+      case XW.msg: cb(JSON.parse(e.data.d)); break;
+    }
+  };
+  var arr = rABS ? data : btoa(fixdata(data));
+  worker.postMessage({d:arr,b:rABS});
+}
+
+function xw_xfer(data, cb) {
+  var worker = new Worker(rABS ? XW.rABS : XW.norABS);
+  worker.onmessage = function(e) {
+    switch(e.data.t) {
+      case 'ready': break;
+      case 'e': console.error(e.data.d); break;
+      default: xx=ab2str(e.data).replace(/\n/g,"\\n").replace(/\r/g,"\\r"); console.log("done"); cb(JSON.parse(xx)); break;
+    }
+  };
+  if(rABS) {
+    var val = s2ab(data);
+    worker.postMessage(val[1], [val[1]]);
+  } else {
+    worker.postMessage(data, [data]);
+  }
+}
+
+function xw(data, cb) {
+  transferable = document.getElementsByName("xferable")[0].checked;
+  if(transferable) xw_xfer(data, cb);
+  else xw_noxfer(data, cb);
+}
+
+function get_radio_value( radioName ) {
+  var radios = document.getElementsByName( radioName );
+  for( var i = 0; i < radios.length; i++ ) {
+    if( radios[i].checked || radios.length === 1 ) {
+      return radios[i].value;
+    }
+  }
+}
+
+function to_json(workbook) {
+  var result = {};
+  workbook.SheetNames.forEach(function(sheetName) {
+    var roa = X.utils.sheet_to_row_object_array(workbook.Sheets[sheetName]);
+    if(roa.length > 0){
+      result[sheetName] = roa;
+    }
+  });
+  return result;
+}
+var filePool = [];
+function to_csv(workbook) {
+  filePool = [];
+  var result = [];
+  var ind = 0;
+  workbook.SheetNames.forEach(function(sheetName) {
+    var csv = X.utils.sheet_to_csv(workbook.Sheets[sheetName]);
+    if(csv.length > 0){
+      result.push("工作簿: " + sheetName);
+      result.push("");
+      result.push(csv);
+      filePool.push({name: sheetName + (ind++) + '.csv', content: csv});
+    }
+  });
+  return result.join("\n");
+}
+
+function to_formulae(workbook) {
+  var result = [];
+  workbook.SheetNames.forEach(function(sheetName) {
+    var formulae = X.utils.get_formulae(workbook.Sheets[sheetName]);
+    if(formulae.length > 0){
+      result.push("工作簿: " + sheetName);
+      result.push("");
+      result.push(formulae.join("\n"));
+    }
+  });
+  return result.join("\n");
+}
+
+function process_wb(wb) {
+  output = to_csv(wb);
+  if(out.innerText === undefined) out.textContent = output;
+  else out.innerText = output;
+  if(typeof console !== 'undefined') console.log("output", new Date());
+}
+
+var drop = document.getElementById('drop');
+function handleDrop(e) {
+  e.stopPropagation();
+  e.preventDefault();
+  rABS = document.getElementsByName("userabs")[0].checked;
+  use_worker = document.getElementsByName("useworker")[0].checked;
+  var files = e.dataTransfer.files;
+  var f = files[0];
+  {
+    var reader = new FileReader();
+    var name = f.name;
+    reader.onload = function(e) {
+      if(typeof console !== 'undefined') console.log("onload", new Date(), rABS, use_worker);
+      var data = e.target.result;
+      if(use_worker) {
+        xw(data, process_wb);
+      } else {
+        var wb;
+        if(rABS) {
+          wb = X.read(data, {type: 'binary'});
+        } else {
+        var arr = fixdata(data);
+          wb = X.read(btoa(arr), {type: 'base64'});
+        }
+        process_wb(wb);
+      }
+    };
+    if(rABS) reader.readAsBinaryString(f);
+    else reader.readAsArrayBuffer(f);
+  }
+}
+
+function handleDragover(e) {
+  e.stopPropagation();
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+}
+
+if(drop.addEventListener) {
+  drop.addEventListener('dragenter', handleDragover, false);
+  drop.addEventListener('dragover', handleDragover, false);
+  drop.addEventListener('drop', handleDrop, false);
+}
+
+var xlf = document.getElementById('xlf');
+function handleFile(e) {
+  rABS = document.getElementsByName("userabs")[0].checked;
+  use_worker = document.getElementsByName("useworker")[0].checked;
+  var files = e.target.files;
+  var f = files[0];
+  {
+    var reader = new FileReader();
+    var name = f.name;
+    reader.onload = function(e) {
+      if(typeof console !== 'undefined') console.log("onload", new Date(), rABS, use_worker);
+      var data = e.target.result;
+      if(use_worker) {
+        xw(data, process_wb);
+      } else {
+        var wb;
+        if(rABS) {
+          wb = X.read(data, {type: 'binary'});
+        } else {
+        var arr = fixdata(data);
+          wb = X.read(btoa(arr), {type: 'base64'});
+        }
+        process_wb(wb);
+      }
+    };
+    if(rABS) reader.readAsBinaryString(f);
+    else reader.readAsArrayBuffer(f);
+  }
+}
+
+if(xlf.addEventListener) xlf.addEventListener('change', handleFile, false);
+
+// 导出按钮
+var btnSave = document.getElementById('fileExport');
+
+var csvParser = new SimpleExcel.Parser.CSV();
+var csvWriter = new SimpleExcel.Writer.CSV();
+btnSave.addEventListener('click', function (e) {
+  
+  while (filePool.length > 0)
+  {
+    var file = filePool.pop();
+    csvParser.loadString(file.content, 0);
+    csvWriter.insertSheet(csvParser.getSheet(1));
+    csvWriter.saveFile(file.name);
+    csvParser._sheet = [];
+    csvWriter._sheet = [];
+  }
+}); 
+
+</script>
 </html>
